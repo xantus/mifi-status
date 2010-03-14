@@ -1,0 +1,33 @@
+Novatel MiFi 2200 Status Panel
+------------------------------
+
+Only tested on Gnome + ubuntu
+Please email if you have issues
+
+xantus a.t xantus d.o.t org
+
+Installing
+----------
+You need perl modules:
+EV, Gtk2, Gtk2::TrayIcon
+
+And an activated MiFi of course.
+
+Optional: Install the libnotify-bin package for notificaitons
+
+Important!
+----------
+The default ip for the MiFi is 192.168.1.1, if yours isn't
+then edit $ip in mini-status.pl
+
+Running
+-------
+For now, just manuall start it in a terminal
+./mifi-status.pl
+
+On first run, the icons for the status bar will be
+downloaded from your MiFi and placed into images/
+relative to the binary
+
+
+I'll come up with some sort of wifi connection trigger later!
