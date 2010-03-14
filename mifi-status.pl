@@ -8,13 +8,11 @@ use strict;
 use warnings;
 
 use FindBin;
-
 use Glib::EV;
 use Gtk2 -init;
 use EV;
 use AnyEvent::HTTP;
 use Gtk2::TrayIcon;
-
 #use Data::Dumper;
 
 # todo get this from ifconfig / wifi device
@@ -36,21 +34,26 @@ if ( !-d $path || !-e "$path/0batt1.gif" ) {
         vzrssi4.gif
         vzrssi5.gif
     );
-    print "Downloading image resources from your MiFi... (using wget)\n";
-    system( 'wget', '-q', "http://$ip/images/$_", '-O', "$path/$_" ) foreach ( @images );
+    if ( $^O eq 'MSWin32' ) {
+        print "Download and these images into the images/ dir:\n";
+        foreach ( @images ) { print "$_\n"; }
+    } else {
+        print "Downloading image resources from your MiFi... (using wget)\n";
+        system( 'wget', '-q', "http://$ip/images/$_", '-O', "$path/$_" ) foreach ( @images );
+    }
 }
 
-my $status = [
-    'Searching',
-    'Connecting',
-    'Connected',
-    'Disconnecting',
-    'Disconnected',
-    'Not Activated',
-    'Modem Failure',
-    'Dormant',
-    'SIM Failure'
-];
+my $status = [qw(
+    Searching
+    Connecting
+    Connected
+    Disconnecting
+    Disconnected
+    Not Activated
+    Modem Failure
+    Dormant
+    SIM Failure
+)];
 
 my $last;
 my $info = Gtk2::TrayIcon->new( 'MiFi Status' );
@@ -73,7 +76,7 @@ $batt->show_all;
 $signal->show_all;
 $info->show_all;
 
-my $timer = EV::timer( 1, 3, \&check_mifi );
+my $timer = EV::timer( 1, 0, \&check_mifi );
 
 main Gtk2;
 
@@ -82,14 +85,16 @@ sub check_mifi {
 }
 
 sub process {
-     my $r = shift;
-    
+    my $r = shift;
+
+    $timer = EV::timer( 3, 0, \&check_mifi );
+
     if ( !$r || $r !~ m/\x1b/ ) {
         $label->set_text( 'MiFi - Can\'t get status :(' );
         return;
     }
+
     my $data = {};
-    my $c = {};
     while( $r =~ s/^([^\x1b]+)\x1b// ) {
         my ( $k, $v ) = split( /=/, $1, 2 );
         $data->{$k} = $v;
@@ -101,12 +106,11 @@ sub process {
         return;
     }
 
+    my $c = {};
     foreach my $k ( keys %$data ) {
-        next if ( $last->{$k} eq $data->{$k} );
-        #$c->{$k} = [ $last->{$k}, $data->{$k} ];
-        $c->{$k} = $data->{$k};
+        $c->{$k} = $data->{$k} if ( $last->{$k} ne $data->{$k} );
     }
-    
+
     $last = $data;
 
     update( $c );
@@ -117,7 +121,7 @@ sub process {
 sub update {
     my $c = shift;
     my $startup = shift || 0;
-    
+
     return unless ( keys %$c );
 
     # WwIpAddr
