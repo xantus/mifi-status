@@ -12,6 +12,7 @@ use FindBin;
 use Glib::EV;
 use Gtk2 -init;
 use EV;
+use AnyEvent::HTTP;
 use Gtk2::TrayIcon;
 
 #use Data::Dumper;
@@ -72,15 +73,17 @@ $batt->show_all;
 $signal->show_all;
 $info->show_all;
 
-my $timer = EV::timer( 3, 1, \&check_mifi );
-
-check_mifi();
+my $timer = EV::timer( 1, 3, \&check_mifi );
 
 main Gtk2;
 
 sub check_mifi {
-    my $r = `GET http://$ip/getStatus.cgi?dataType=TEXT`;
+    http_get "http://$ip/getStatus.cgi?dataType=TEXT", \&process;
+}
 
+sub process {
+     my $r = shift;
+    
     if ( !$r || $r !~ m/\x1b/ ) {
         $label->set_text( 'MiFi - Can\'t get status :(' );
         return;
