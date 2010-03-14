@@ -1,8 +1,18 @@
 Novatel MiFi 2200 Status Panel
 ------------------------------
 
-Only tested on Gnome + ubuntu
-Please email if you have issues
+This only works for Wifi mode, not modem mode.
+
+Any computer connected to your MiFi can use this
+status panel tool, no web admin authentication
+is needed.
+
+If you need to charge your MiFi and keep it in
+Wifi mode, then visit:
+http://cnettv.cnet.com/8301-13415_53-10386916-11.html
+
+This has only been tested on Gnome + ubuntu
+Please email me if you have issues!
 
 xantus a.t xantus d.o.t org
 
@@ -14,6 +24,8 @@ EV, Gtk2, Gtk2::TrayIcon
 And an activated MiFi of course.
 
 Optional: Install the libnotify-bin package for notificaitons
+
+wget is also needed to download the resource images
 
 Important!
 ----------
@@ -30,4 +42,4 @@ downloaded from your MiFi and placed into images/
 relative to the binary
 
 
-I'll come up with some sort of wifi connection trigger later!
+I will come up with some sort of wifi connection trigger later!
