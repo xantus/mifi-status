@@ -1,0 +1,23 @@
+#!/usr/bin/perl
+
+# begin ugly hack
+
+use warnings;
+use strict;
+
+my $iface = shift || 'invalid';
+
+die "not wlan1" unless ( $iface eq "wlan1" );
+
+sleep(1);
+
+$_ = `iwconfig wlan1 2>&1 | grep ESSID | cut -f 2 -d ":"`;
+chomp; s/"|\s{2,}//g;
+
+die "not a mifi" unless ( /MiFi/ );
+
+system("killall","mifi-status.pl");
+sleep(2);
+
+$ENV{DISPLAY} = ':0.0';
+system("/usr/bin/mifi-status.pl &");

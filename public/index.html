@@ -1,0 +1,149 @@
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>MiFi Status</title>
+<meta http-equiv="generator" content="Mojolicious" />
+<meta http-equiv="imagetoolbar" content="no" />
+<link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
+<meta http-equiv="X-UA-Compatible" content="chrome=1">
+<!-- ExtJS CSS -->
+<link rel="stylesheet" type="text/css" href="js/ext-3.2-beta/resources/css/ext-all.css" />
+
+<!-- link rel="stylesheet" type="text/css" href="css/mifi-status.css" --/>
+</head>
+<body scroll="no">
+
+<!-- ExtJS -->
+<script type="text/javascript" src="js/ext-3.2-beta/adapter/ext/ext-base.js"></script>
+<script type="text/javascript" src="js/ext-3.2-beta/ext-all.js"></script>
+
+<script type="text/javascript" src="js/web-socket-js/swfobject.js"></script>
+<script type="text/javascript" src="js/web-socket-js/FABridge.js"></script>
+<script type="text/javascript" src="js/web-socket-js/web_socket.js"></script>
+
+<script type="text/javascript">
+    WebSocket.__swfLocation = "js/web-socket-js/WebSocketMain.swf";
+    Ext.BLANK_IMAGE_URL = 'js/ext-3.2-beta/resources/images/s.gif';
+    Ext.onReady(function() {
+        var rt = Ext.data.Record.create([
+            { name: 'id' },
+            { name: 'name' },
+            { name: 'rx' }
+        ]);
+
+        var store = window.store = new Ext.data.JsonStore({
+            reader: new Ext.data.JsonReader( { idProperty: 'id', fields: rt } )
+        });
+        store.recordType = rt;
+
+        var recId = 0;
+
+        var chart = new Ext.Viewport({
+            iconCls: 'chart',
+            title: 'MiFi Trafic',
+            frame: true,
+            width: 700,
+            height: 300,
+            layout: 'fit',
+            items: {
+                xtype: 'linechart',
+                store: store,
+                url: 'js/ext-3.2-beta/resources/charts.swf',
+                xField: 'name',
+                yField: 'rx',
+                yAxis: new Ext.chart.NumericAxis({
+                    displayName: 'Rx',
+                    labelRenderer : Ext.util.Format.numberRenderer('0.00')
+                }),
+                tipRenderer : function(chart, record){
+                    return record.data.rx + ' Mb Down / '+record.data.tx + ' Mb Up';
+                    //Ext.util.Format.number(record.data.visits, '0,0') + ' visits in ' + record.data.name;
+                },
+                chartStyle: {
+                    xAxis: {
+                        color: 0x69aBc8,
+                        majorTicks: {color: 0x69aBc8, length: 4},
+                        minorTicks: {color: 0x69aBc8, length: 2},
+                        majorGridLines: {size: 1, color: 0xeeeeee}
+                    },
+                    yAxis: {
+                        color: 0x69aBc8,
+                        majorTicks: {color: 0x69aBc8, length: 4},
+                        minorTicks: {color: 0x69aBc8, length: 2},
+                        majorGridLines: {size: 1, color: 0xdfe8f6}
+                    },
+                },
+                series: [{
+                    type: 'line',
+                    displayName: 'Rx',
+                    yField: 'rx',
+//                    labelRenderer : Ext.util.Format.numberRenderer('0.00'),
+                    style: {
+                        color:0x99BBE8
+                    }
+                },{
+                    type:'line',
+                    displayName: 'Tx',
+                    yField: 'tx',
+//                    labelRenderer : Ext.util.Format.numberRenderer('0.00'),
+                    style: {
+                        color: 0x15428B
+                    }
+                }]
+            }
+        });
+
+        var ws = null;
+        var last = {};
+
+        var ping = function() {
+            if ( ws ) {
+                ws.send( '.' );
+                ping.defer( 3000 );
+            }
+        };
+
+        var connect = function() {
+            // Connect to Web Socket.
+            // Change host/port here to your own Web Socket server.
+            ws = new WebSocket("ws://127.0.1.1:4000/");
+
+            // Set event handlers.
+            ws.onopen = function() {
+                ws.send('.');
+                ping.defer( 3000 );
+            };
+
+            ws.onmessage = function(e) {
+                var data = Ext.decode( e.data );
+                if ( data.history ) {
+                    var d = new Date();
+                    for ( var i = 0, len = data.history.length; i < len; i++ ) {
+                        if ( data.history[ i ]['WwSessionRxMb'] ) {
+                            var r = new rt({ id: ++recId, name: recId, rx: data.history[ i ]['WwSessionRxMb'] || 0, tx: data.history[ i ]['WwSessionTxMb'] || 0 }, recId );
+                            store.add( r );
+                        }
+                    }
+                }
+                if ( data['WwSessionRxMb'] ) {
+                    var d = new Date();
+                    var r = new rt({ id: ++recId, name: recId, rx: data['WwSessionRxMb'] || 0, tx: data['WwSessionTxMb'] || 0 }, recId );
+                    store.add( r );
+                    if ( store.getCount() > 50 ) {
+                        store.removeAt( 0 );
+                    }
+                }
+                last = data;
+            };
+
+            ws.onclose = function() {
+                connect.defer( 5000 );
+            };
+        };
+
+        connect();
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# change user to your username
+/usr/bin/sudo -u user /usr/bin/mifi-up "$IFACE" 
+
