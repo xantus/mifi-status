@@ -13,6 +13,8 @@ use Gtk2 -init;
 use EV;
 use AnyEvent::HTTP;
 use Gtk2::TrayIcon;
+use Date::Format;
+use Time::Duration;
 #use Data::Dumper;
 
 # todo get this from ifconfig / wifi device
@@ -43,17 +45,24 @@ if ( !-d $path || !-e "$path/0batt1.gif" ) {
     }
 }
 
-my $status = [qw(
-    Searching
-    Connecting
-    Connected
-    Disconnecting
-    Disconnected
-    Not Activated
-    Modem Failure
-    Dormant
-    SIM Failure
-)];
+# XXX this depends on firmware verison...or the docs are wrong
+my $status = [
+    'Searching',
+    'Connecting',
+    'Connected',
+    'Disconnecting',
+    'Disconnected',
+    'Not Activated',
+    'Modem Failure',
+    'Dormant',
+    'SIM Failure'
+];
+
+my $roaming = {
+    0 => 'No',
+    1 => 'Yes',
+    2 => 'Yes (Extended Network)'
+};
 
 my $last;
 my $info = Gtk2::TrayIcon->new( 'MiFi Status' );
@@ -94,6 +103,8 @@ sub process {
         return;
     }
 
+    $r .= "\x1b" unless $r =~ m/\x1b$/;
+
     my $data = {};
     while( $r =~ s/^([^\x1b]+)\x1b// ) {
         my ( $k, $v ) = split( /=/, $1, 2 );
@@ -111,11 +122,16 @@ sub process {
         $c->{$k} = $data->{$k} if ( $last->{$k} ne $data->{$k} );
     }
 
-    $last = $data;
+#    if ( keys %$c ) {
+#        print Data::Dumper->Dump([$c],['c'])."\n";
+#        my $copy = { map { $_ => $last->{$_} } keys %$c };
+#        print Data::Dumper->Dump([$copy],['last'])."\n";
+#    }
 
     update( $c );
-
-#    print Data::Dumper->Dump([$c])."\n" if ( keys %$c );
+    
+#    @{$last}{keys %$data} = values %$data;
+    $last = $data;
 }
 
 sub update {
@@ -138,27 +154,36 @@ sub update {
     # WwGateway
     # WwRoaming
     # WwSessionRxMb
+    # WwSessionTimeSecs
 
     my $up = $c->{'WwSessionTxMb'} || $last->{'WwSessionTxMb'};
     my $down = $c->{'WwSessionRxMb'} || $last->{'WwSessionRxMb'};
     my $s = $c->{'WwConnStatus'} || $last->{'WwConnStatus'};
 
     # label
+    #$label->set_text( sprintf( 'MiFi - %s - %s - Up: %.2f Dn: %.2f ', $status->[ $s ], $last->{'WwNetwkTech'}, $up, $down ) );
     $label->set_text( sprintf( 'MiFi - %s - Up: %.2f Dn: %.2f ', $status->[ $s ], $up, $down ) );
 
     # tooltip
-    if ( $c->{'WwIpAddr'} || $c->{'WwSessionRxMb'}
-        || $c->{'WwSessionTxMb'} || $c->{'WwRoaming'} ) {
-        $tooltip->set_tip( $info, sprintf( "%s %s\nIP: %s\nNetmask: %s\nGateway: %s\nDNS: %s\nRoaming: %s\nClients: %s\n\nUpload: %.2f MB\nDownload: %.2f MB",
-            @{$last}{qw( WwNetwkName WwNetwkTech WwIpAddr WwMask WwGateway WwDNS1 )},
-            ( $last->{'WwRoaming'} ? 'Yes' : 'No' ),
-            @{$last}{qw( WiConnClients WwSessionTxMb WwSessionRxMb )}
-        ) );
-    }
+    $tooltip->set_tip( $info, sprintf( "%s %s\nIP: %s\nNetmask: %s\nGateway: %s\nDNS: %s\nRoaming: %s\nConnected Clients: %s\nConnected Since: %s\n    %s\n\nUpload: %.2f MB\nDownload: %.2f MB",
+        @{$last}{qw( WwNetwkName WwNetwkTech WwIpAddr WwMask WwGateway WwDNS1 )},
+        $roaming->{ $last->{'WwRoaming'} },
+        $last->{'WiConnClients'},
+        time2str('%D %T', time() - $last->{'WwSessionTimeSecs'} ),
+        '( '.duration( $last->{'WwSessionTimeSecs'} ).' )',
+        @{$last}{qw( WwSessionTxMb WwSessionRxMb )}
+    ) );
 
     # signal
-    if ( $c->{'WwRssi'} ) {
+    if ( exists $c->{'WwRssi'} ) {
         $signal_icon->set_from_file( $path.sprintf( '/vzrssi%d.gif', $c->{'WwRssi'} ) );
+    }
+
+    # client connect / disconnect
+    if ( !$startup && exists $c->{'WiConnClients'} && -x '/usr/bin/notify-send' ) {
+        my $msg = ( ( $last->{'WiConnClients'} > $c->{'WiConnClients'} )
+            ? 'Client Disconnected' : 'Client Connected' ) . ' ( '.$c->{'WiConnClients'}.' / 5 )';
+        system( '/usr/bin/notify-send', qw( -u normal ), $last->{'WwNetwkName'}.' MiFi', $msg );
     }
 
     # battery charging
@@ -170,13 +195,13 @@ sub update {
             if ( !$startup && -x '/usr/bin/notify-send' ) {
                 # libnotify doesn't show animated icons, so just show the max charge
                 $img = $path.sprintf( '/0batt%d.gif', 4 );
-                system( '/usr/bin/notify-send', qw( -u normal -i ), $img, join( ' ', @{$last}{qw( WwNetwkName WwNetwkTech )} ), 'Battery Charging' );
+                system( '/usr/bin/notify-send', qw( -u normal -i ), $img, $last->{'WwNetwkName'}.' MiFi', 'Battery Charging' );
             }
         } else {
             $c->{'BaBattStat'} = $last->{'BaBattStat'};
             if ( !$startup && -x '/usr/bin/notify-send' ) {
                 $img = $path.sprintf( '/0batt%d.gif', $c->{'BaBattStat'} );
-                system( '/usr/bin/notify-send', qw( -u normal -i ), $img, join( ' ', @{$last}{qw( WwNetwkName WwNetwkTech )} ), 'Battery Discharging' );
+                system( '/usr/bin/notify-send', qw( -u normal -i ), $img, $last->{'WwNetwkTech'}.' MiFi', 'Battery Discharging' );
             }
         }
     }
@@ -187,7 +212,7 @@ sub update {
         $batt_icon->set_from_file( $img );
         # ubuntu: sudo apt-get install libnotify-bin
         if ( $c->{'BaBattStat'} < 2 && -x '/usr/bin/notify-send' ) {
-            system( '/usr/bin/notify-send', qw( -u critical -i ), $img, join( ' ', @{$last}{qw( WwNetwkName WwNetwkTech )} ),  'Warning!<br>Battery Low' );
+            system( '/usr/bin/notify-send', qw( -u critical -i ), $img, $last->{'WwNetwkName'}.' MiFi',  'Warning!<br>Battery Low' );
         }
     }
 }
