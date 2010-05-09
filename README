@@ -15,8 +15,7 @@ xantus a.t xantus d.o.t org
 Installing
 ----------
 You need perl modules:
-ExtUtils::PkgConfig, ExtUtils::Depends,
-AnyEvent::HTTP, EV, Gtk2::TrayIcon, Gtk2, Glib::EV
+sudo cpan ExtUtils::PkgConfig ExtUtils::Depends AnyEvent::HTTP EV Gtk2::TrayIcon Gtk2 Glib::EV Time::Duration
 
 And an activated MiFi of course.
 
